@@ -165,30 +165,110 @@ LoggerStore.shared.storeMessage(
 These show up in the console's **Logs** tab and stream to the desktop app with
 their labels and metadata intact.
 
-### WebSockets
+## WebSockets
 
+`NetworkLogger.enableProxy()` does **not** capture WebSocket frames.
 `URLSessionWebSocketTask.Message` is a Swift-only enum with no Objective-C
-representation, so frames can't be captured by swizzling the way requests are.
-Create sockets through the wrapper instead — it mirrors the task's API, so it's
-a one-line change per socket:
+representation, so intercepting it at runtime would mean reaching into private
+internals that could break with any OS update. Instead you create the socket
+through a wrapper that mirrors the task's API — a one-line change at the call
+site, and nothing else about your code changes.
 
-```swift
-let socket = OwlseWebSocketTask(url: url)
-socket.resume()
-try await socket.send(.string(#"{"type":"subscribe"}"#))
-let message = try await socket.receive()
+```diff
+- let socket = URLSession.shared.webSocketTask(with: url)
++ let socket = OwlseWebSocketTask(url: url)
 ```
 
-Opens, closes, sends, receives, pings, and errors all land in the **Sockets**
-tab. On a different socket stack (Starscream, SocketRocket, a server SDK)? Feed
-Owlse directly:
+From there, `resume()`, `send`, `receive`, `sendPing`, and `cancel` all work as
+they always did, and every frame is recorded.
+
+### A complete service
+
+```swift
+import Owlse
+
+final class ChatSocketService {
+    // Hold on to the task. Nothing else retains it, and once it deallocates
+    // you stop receiving — which looks exactly like "Owlse stopped logging".
+    private var socket: OwlseWebSocketTask?
+
+    func connect(to url: URL) {
+        let socket = OwlseWebSocketTask(url: url)
+        self.socket = socket
+
+        socket.resume()   // logs an `open` frame
+        receiveNext()     // start the receive loop before sending anything
+
+        socket.send(.string(#"{"type":"subscribe","room":"general"}"#)) { _ in }
+    }
+
+    // `receive` delivers exactly ONE message and then stops. You have to ask
+    // for the next one every time, or the socket goes quiet after a single
+    // frame — by far the most common reason people think Owlse isn't tracking
+    // their socket. It is; there's just nothing more arriving.
+    private func receiveNext() {
+        socket?.receive { [weak self] result in
+            guard let self else { return }
+            if case .success(let message) = result {
+                handle(message)
+                self.receiveNext()   // ← ask for the next frame
+            }
+            // On failure the wrapper logged the error frame and the socket is
+            // done — don't loop, or you'll spin on a dead connection.
+        }
+    }
+
+    func disconnect() {
+        socket?.cancel(with: .goingAway, reason: "user left".data(using: .utf8))
+        socket = nil
+    }
+}
+```
+
+The full version — with the async/await variant, ping keepalive, and an adapter
+for third-party socket libraries — is in
+[`Demo/Sources/Integrations/IntegrationsExamples/WebSocketIntegration.swift`](Demo/Sources/Integrations/IntegrationsExamples/WebSocketIntegration.swift).
+
+### What the desktop app shows
+
+Open the **Sockets** tab and frames appear grouped by connection, newest first:
+
+| Recorded | When |
+|---|---|
+| `open` | `resume()` |
+| `text` / `binary` | every `send` and `receive` |
+| `ping` / `pong` | `sendPing`, and its reply |
+| `close` | `cancel(with:reason:)`, with the code and reason |
+| `error` | any send, receive, or ping failure |
+
+Each frame carries its direction, size, and payload; anything that parses as
+JSON is pretty-printed. Binary frames that are really UTF-8 JSON are decoded
+rather than shown as a byte count. Payloads are truncated at
+`WebSocketLogger.payloadLimit` (8 KB by default, on a character boundary) so a
+chatty socket can't bloat the store — raise it if you need the full frames.
+
+Frames stream to the Mac over the same connection as everything else, so the
+`Info.plist` keys and `RemoteLogger` setup above are all you need. They're also
+kept in the local store, so they show up in the in-app console and in any
+`.owlse` file you share.
+
+### Using a different socket library
+
+On Starscream, SocketRocket, or a server SDK? Report frames yourself —
+`WebSocketLogger.record` is the same call the wrapper makes internally, so the
+Sockets tab can't tell the difference:
 
 ```swift
 WebSocketLogger.record(direction: .received, kind: .text,
-                       size: payload.count, text: payload, url: url)
+                       size: payload.utf8.count, text: payload, url: url)
 ```
 
-### Custom `URLSession` setups
+`direction` is `.sent` or `.received`; `kind` is `.text`, `.binary`, `.ping`,
+`.pong`, `.open`, `.close`, or `.error`. The `url` is what the desktop app
+groups a connection by, so keep it stable for the socket's lifetime — a value
+that changes per frame shows up as a separate connection each time.
+
+## Custom `URLSession` setups
 
 If you'd rather not swizzle, wire the delegate up yourself:
 
@@ -200,7 +280,7 @@ let session = URLSession(
 )
 ```
 
-### Redacting sensitive data
+## Redacting sensitive data
 
 Requests can carry tokens and personal data you don't want in a shared store:
 
@@ -223,7 +303,7 @@ want to capture part of your traffic.
 
 | Owlse      | Swift      | Xcode       | Platforms                                        |
 |------------|------------|-------------|--------------------------------------------------|
-| Owlse 5.x  | Swift 5.10 | Xcode 15.4  | iOS 15, tvOS 15, watchOS 8, macOS 12, visionOS 1 |
+| Owlse 5.x  | Swift 5.10 | Xcode 15.4  | iOS 15, tvOS 15, watchOS 9, macOS 13, visionOS 1 |
 
 The desktop app requires macOS 13 or later.
 

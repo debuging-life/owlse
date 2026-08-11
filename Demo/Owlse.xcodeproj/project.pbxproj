@@ -87,6 +87,7 @@
 		0C0B31FA26D179A70045C9E1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0C1221E525CE09C100B81D7A /* URLSessionAutomatedIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLSessionAutomatedIntegration.swift; sourceTree = "<group>"; };
 		0C25FB6E25CDDCAB00A895C2 /* URLSessionManualIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLSessionManualIntegration.swift; sourceTree = "<group>"; };
+		0CFE5B0A2FA1000100D44C21 /* WebSocketIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketIntegration.swift; sourceTree = "<group>"; };
 		0C30B2F52A3F375400D65F8F /* Owlse_DemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Owlse_DemoApp.swift; sourceTree = "<group>"; };
 		0C30B2F92A3F375500D65F8F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0C5751182B01BA2B001074E5 /* DebugAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugAnalyticsView.swift; sourceTree = "<group>"; };
@@ -168,6 +169,7 @@
 				0C1221E525CE09C100B81D7A /* URLSessionAutomatedIntegration.swift */,
 				49E82A8526D107A00070244F /* AlamofireIntegration.swift */,
 				49E82A8826D1083D0070244F /* MoyaIntegration.swift */,
+				0CFE5B0A2FA1000100D44C21 /* WebSocketIntegration.swift */,
 			);
 			path = IntegrationsExamples;
 			sourceTree = "<group>";
