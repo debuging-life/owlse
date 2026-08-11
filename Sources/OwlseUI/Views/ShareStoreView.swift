@@ -1,0 +1,176 @@
+// The MIT License (MIT)
+//
+// Copyright (c) 2020-2026 Alexander Grebenyuk (github.com/kean).
+
+#if os(iOS) || os(macOS) || os(watchOS) || os(visionOS)
+
+import SwiftUI
+import CoreData
+import Owlse
+import Combine
+
+@available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+package struct ShareStoreView: View {
+    /// Preselected sessions.
+    var sessions: Set<UUID> = []
+    var onDismiss: () -> Void
+
+    @State private var isShowingLabelPicker = false
+    @State private var isShowingPreparingForShareView = false
+    @StateObject private var viewModel = ShareStoreViewModel()
+
+    @Environment(\.store) private var store
+
+    package init(sessions: Set<UUID> = [], onDismiss: @escaping () -> Void) {
+        self.sessions = sessions
+        self.onDismiss = onDismiss
+    }
+
+    package var body: some View {
+        content
+            .onAppear {
+                if !sessions.isEmpty {
+                    viewModel.sessions = sessions
+                } else if viewModel.sessions.isEmpty, let sessionID = store.currentSessionID {
+                    viewModel.sessions = [sessionID]
+                }
+                viewModel.store = store as? LoggerStore
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+#if os(iOS) || os(watchOS) || os(visionOS)
+        Form {
+            sectionSharingOptions
+            sectionShare
+        }
+        .inlineNavigationTitle("Share Logs")
+        .toolbar {
+#if os(watchOS)
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                }
+            }
+#else
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel", action: onDismiss)
+            }
+#endif
+        }
+#if os(iOS) || os(macOS) || os(visionOS)
+        .sheet(item: $viewModel.shareItems) {
+            ShareView($0).onCompletion(onDismiss)
+        }
+#endif
+#elseif os(macOS)
+        Form {
+            sectionSharingOptions
+            Divider()
+            sectionShare.popover(item: $viewModel.shareItems, arrowEdge: .trailing) {
+                ShareView($0)
+            }
+        }
+        .listStyle(.sidebar)
+        .padding()
+        .popover(isPresented: $isShowingLabelPicker, arrowEdge: .trailing) {
+            destinationLogLevels.padding()
+        }
+#endif
+    }
+
+    @ViewBuilder
+    private var sectionSharingOptions: some View {
+        Section {
+            ConsoleSessionsPickerView(selection: $viewModel.sessions)
+#if os(iOS) || os(visionOS)
+            NavigationLink(destination: destinationLogLevels) {
+                InfoRow(title: "Log Levels", details: viewModel.selectedLevelsTitle)
+            }
+#else
+            HStack {
+                Text("Log Levels")
+                Spacer()
+                Button(action: { isShowingLabelPicker = true }) {
+                    Text(viewModel.selectedLevelsTitle + "...")
+                }
+            }
+#endif
+        }
+        Section {
+            Picker("Output", selection: $viewModel.output) {
+                ForEach(viewModel.shareStoreOutputs, id: \.rawValue) { shareOutput in
+                    Text(shareOutput.interfaceTitle).tag(shareOutput)
+                }
+            }
+#if os(macOS)
+            .labelsHidden()
+#endif
+        }
+    }
+
+    private var destinationLogLevels: some View {
+        Form {
+            ConsoleSearchLogLevelsCell(selection: $viewModel.logLevels)
+        }.inlineNavigationTitle("Log Levels")
+    }
+
+#if os(iOS) || os(macOS) || os(visionOS)
+    private var sectionShare: some View {
+        Section {
+            Button(action: { viewModel.buttonSharedTapped() }) {
+#if os(iOS) || os(visionOS)
+                HStack {
+                    Spacer()
+                    Text(viewModel.isPreparingForSharing ? "Exporting..." : "Share")
+                        .bold()
+                    Spacer()
+                }
+#else
+                Text(viewModel.isPreparingForSharing ? "Exporting..." : "Share")
+#endif
+            }
+            .disabled(viewModel.isPreparingForSharing)
+            .foregroundColor(.white)
+#if os(iOS) || os(visionOS)
+            .listRowBackground(viewModel.isPreparingForSharing ? Color.accentColor.opacity(0.33) : Color.accentColor)
+#endif
+        }
+    }
+#else
+    private var sectionShare: some View {
+        Section {
+            NavigationLink(destination: VStack {
+                if let shareItems = viewModel.shareItems {
+                    ShareLink(items: shareItems.items as! [URL])
+                } else {
+                    ProgressView(label: {
+                        Text("Exporting...")
+                    }).onAppear {
+                        viewModel.prepareForSharing()
+                    }
+                }
+            }, label: {
+                Text("Share...")
+            })
+        }
+    }
+#endif
+}
+
+#if DEBUG
+@available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+#Preview {
+#if os(iOS) || os(visionOS)
+    NavigationView {
+        ShareStoreView(onDismiss: {})
+    }
+#else
+    ShareStoreView(onDismiss: {})
+        .frame(width: 240).fixedSize()
+#endif
+}
+#endif
+
+#endif

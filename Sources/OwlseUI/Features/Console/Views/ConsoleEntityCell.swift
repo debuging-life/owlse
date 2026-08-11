@@ -1,0 +1,134 @@
+// The MIT License (MIT)
+//
+// Copyright (c) 2020-2026 Alexander Grebenyuk (github.com/kean).
+
+#if os(iOS) || os(tvOS) || os(macOS) || os(visionOS) || os(watchOS)
+
+import Foundation
+import SwiftUI
+import Owlse
+import CoreData
+
+@available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+struct ConsoleEntityCell: View {
+    let entity: NSManagedObject
+    var urlMatch: ConsoleSearchMatch?
+
+    init(entity: NSManagedObject) {
+        self.entity = entity
+    }
+
+    consuming func urlMatch(_ match: ConsoleSearchMatch?) -> ConsoleEntityCell {
+        self.urlMatch = match
+        return self
+    }
+
+    var body: some View {
+        if entity.isDeleted {
+            EmptyView()
+        } else {
+            switch LoggerEntity(entity) {
+            case .message(let message):
+                _ConsoleMessageCell(message: message)
+            case .task(let task):
+                _ConsoleTaskCell(task: task, urlMatch: urlMatch)
+            }
+        }
+    }
+}
+
+@available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+private struct _ConsoleMessageCell: View {
+    let message: LoggerMessageEntity
+
+    @State private var shareItems: ShareItems?
+
+    var body: some View {
+#if os(iOS) || os(visionOS)
+        let cell = ConsoleMessageCell(message: message, isDisclosureNeeded: true)
+            .background(NavigationLink("", destination: ConsoleMessageDetailsView(message: message)).opacity(0))
+#else
+        let cell = NavigationLink(destination: ConsoleMessageDetailsView(message: message)) {
+            ConsoleMessageCell(message: message)
+        }
+#endif
+
+#if os(iOS) || os(visionOS)
+        cell.swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(action: { shareItems = ShareService.share(message, as: .html) }) {
+                Label("Share", systemImage: "square.and.arrow.up.fill")
+            }.tint(.blue)
+        }
+        .contextMenu {
+            ContextMenu.MessageContextMenu(message: message, shareItems: $shareItems)
+        }
+#if os(iOS) || os(visionOS)
+        .sheet(item: $shareItems, content: ShareView.init)
+#else
+        .popover(item: $shareItems, attachmentAnchor: .point(.leading), arrowEdge: .leading) { ShareView($0) }
+#endif
+#else
+        cell
+#endif
+    }
+}
+
+@available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+private struct _ConsoleTaskCell: View {
+    let task: NetworkTaskEntity
+    var urlMatch: ConsoleSearchMatch?
+    @State private var shareItems: ShareItems?
+    @State private var sharedTask: NetworkTaskEntity?
+    @Environment(\.store) private var store
+    @EnvironmentObject private var environment: ConsoleEnvironment
+
+    var body: some View {
+#if os(iOS) || os(visionOS)
+        let cell = ConsoleTaskCell(task: task, isDisclosureNeeded: true).urlMatch(urlMatch)
+            .background(NavigationLink("", destination: inspector).opacity(0))
+#else
+        let cell = NavigationLink(destination: inspector) {
+            ConsoleTaskCell(task: task).urlMatch(urlMatch)
+        }
+#endif
+
+#if os(iOS) || os(visionOS)
+        cell.swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(action: {
+#if os(iOS) || os(visionOS)
+                shareItems = ShareService.share(task, as: .html, store: store)
+#else
+                sharedTask = task
+#endif
+            }) {
+                Label("Share", systemImage: "square.and.arrow.up.fill")
+            }.tint(.blue)
+        }
+        .contextMenu {
+#if os(iOS) || os(visionOS)
+            ContextMenu.NetworkTaskContextMenuItems(task: task, sharedItems: $shareItems)
+#else
+            ContextMenu.NetworkTaskContextMenuItems(task: task, sharedTask: $sharedTask)
+#endif
+            if let custom = environment.delegate?.console(contextMenuFor: task) {
+                custom
+            }
+        }
+#if os(iOS) || os(visionOS)
+        .sheet(item: $shareItems, content: ShareView.init)
+#else
+        .popover(item: $sharedTask, attachmentAnchor: .point(.leading), arrowEdge: .leading) { ShareNetworkTaskView(task: $0) }
+#endif
+#else
+        cell
+#endif
+    }
+
+    private var inspector: some View {
+        // We don't own NavigationView, so we have to inject the dependencies
+        NetworkInspectorView(task: task)
+            .injecting(environment)
+    }
+}
+
+#endif

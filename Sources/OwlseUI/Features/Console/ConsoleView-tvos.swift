@@ -1,0 +1,134 @@
+// The MIT License (MIT)
+//
+// Copyright (c) 2020-2026 Alexander Grebenyuk (github.com/kean).
+
+#if os(tvOS)
+
+import SwiftUI
+import CoreData
+import Owlse
+import Combine
+
+public struct ConsoleView: View {
+    @StateObject private var environment: ConsoleEnvironment
+    @StateObject private var listViewModel: ConsoleListViewModel
+
+    init(environment: ConsoleEnvironment) {
+        _environment = StateObject(wrappedValue: environment)
+        _listViewModel = StateObject(wrappedValue: .init(environment: environment, filters: environment.filters))
+    }
+
+    public var body: some View {
+        if #available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *) {
+            contents
+        } else {
+            PlaceholderView(imageName: "xmark.octagon", title: "Unsupported", subtitle: "Owlse requires iOS 18 or later").padding()
+        }
+    }
+
+    @available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+    private var contents: some View {
+        GeometryReader { _ in
+            HStack {
+                List {
+                    ConsoleListContentView()
+                }
+
+                // TODO: Not sure it's valid
+                NavigationView {
+                    Form {
+                        ConsoleMenuView()
+                    }.padding()
+                }
+                .frame(width: 700)
+            }
+            .navigationTitle(environment.title)
+            .onAppear { listViewModel.isViewVisible = true }
+            .onDisappear { listViewModel.isViewVisible = false }
+        }
+        .scrollClipDisabled()
+        .injecting(environment)
+        .environmentObject(listViewModel)
+    }
+}
+
+@available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+private struct ConsoleMenuView: View {
+    @EnvironmentObject private var viewModel: ConsoleFiltersViewModel
+    @EnvironmentObject private var environment: ConsoleEnvironment
+    @Environment(\.store) private var store
+    @Environment(\.router) private var router
+
+    var body: some View {
+        Section {
+            Toggle(isOn: $viewModel.options.isOnlyErrors) {
+                Label("Errors Only", systemImage: "exclamationmark.octagon")
+            }
+            Toggle(isOn: environment.bindingForNetworkMode) {
+                Label("Network Only", systemImage: "arrow.down.circle")
+            }
+            NavigationLink(destination: destinationFilters) {
+                Label(environment.bindingForNetworkMode.wrappedValue ? "Network Filters" : "Message Filters", systemImage: "line.3.horizontal.decrease.circle")
+            }
+        } header: { Text("Quick Filters") }
+        Section {
+            Button(action: { router.isShowingSessions = true }) {
+                Label("Sessions", systemImage: "list.clipboard")
+            }
+        } header: { Text("Sessions") }
+        if !store.isReadonly {
+            Section {
+                if #available(iOS 16, tvOS 16, *) {
+                    NavigationLink {
+                        StoreDetailsView(source: .store(store)).padding()
+                    } label: {
+                        Label("Store Info", systemImage: "info.circle")
+                    }
+                }
+                Button(role: .destructive, action: {
+                    environment.index.clear()
+                    store.removeAll()
+                }, label: {
+                    Label("Remove Logs", systemImage: "trash")
+                })
+            } header: { Text("Store") }
+        }
+        Section {
+            NavigationLink(destination: destinationSettings) {
+                Label("Settings", systemImage: "gear")
+            }
+        } header: { Text("Settings") }
+    }
+
+    @ViewBuilder
+    private var destinationSettings: some View {
+        if let store = store as? LoggerStore {
+            SettingsView(store: store).padding()
+        }
+    }
+
+    private var destinationFilters: some View {
+        ConsoleFiltersView().padding()
+    }
+}
+
+extension View {
+    @available(tvOS, obsoleted: 17.0, renamed: "scrollClipDisabled")
+    @ViewBuilder func disableScrollClip() -> some View {
+        if #available(tvOS 17.0, *) {
+            scrollClipDisabled()
+        } else {
+            self
+        }
+    }
+}
+
+#if DEBUG
+@available(iOS 18, tvOS 18, macOS 15, watchOS 11, visionOS 1, *)
+#Preview {
+    NavigationView {
+        ConsoleView(store: .mock)
+    }
+}
+#endif
+#endif

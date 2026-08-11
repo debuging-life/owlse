@@ -1,0 +1,121 @@
+# Getting Started
+
+Learn how to integrate Owlse.
+
+## 1. Add Frameworks
+
+- **Option 1 (Recommended)**. Add package to your project using SwiftPM.
+
+```
+https://github.com/debuging-life/owlse
+```
+
+Add **Owlse** and **OwlseUI** libraries to your app.
+
+- **Option 2**. Use precompiled binary frameworks from the [latest release](this repository).
+
+## 2. Integrate Owlse Framework
+
+**Owlse** framework contains APIs for logging, capturing, and mocking network requests, as well as connecting to the Owlse Pro apps.
+
+### 2.1. Capture Network Requests
+
+- **Option 1 (Recommended)**. Use ``URLSessionProxy``, a thin wrapper on top of `URLSession`. 
+
+```swift
+import Owlse
+
+#if DEBUG
+let session: URLSessionProtocol = URLSessionProxy(configuration: .default)
+#else
+let session: URLSessionProtocol = URLSession(configuration: .default)
+#endif
+```
+
+> tip: See <doc:NetworkLogging-Article> for more information about how to configure network logging if your app does not use `URLSession` directly, how to further customize it, how to capture and display decoding errors, and more. Owlse is modular and will accommodate almost any system.
+
+- **Option 2 (Quickest)**. If you are evaluating the framework, the quickest way to get started is with a proxy from the **OwlseProxy** module.
+
+```swift
+import OwlseProxy
+
+#if DEBUG
+NetworkLogger.enableProxy()
+#endif
+```
+
+> important: **OwlseProxy** uses method swizzling and private APIs, and it is not recommended that you include it in the production builds of your app. It is also not guaranteed to continue working with new versions of the system SDKs.
+
+### 2.2. Collect Logs
+
+To store regular log messages, use ``LoggerStore``.
+
+```swift
+LoggerStore.shared.storeMessage(
+    label: "auth",
+    level: .debug,
+    message: "Will login user",
+    metadata: ["userId": .string("uid-1")]
+)
+```
+
+> tip: Alternatively, you can use it as a SwiftLog backend using the upstream [PulseLogHandler](https://github.com/kean/PulseLogHandler) package.
+
+## 3. Integrate OwlseUI Framework
+
+**OwlseUI** allows you to view logs and network requests directly from your app. The framework is centered around a single screen: `ConsoleView`. On iOS, you can push it into the existing navigation stack or present it modally.
+
+```swift
+import OwlseUI
+
+NavigationLink(destination: ConsoleView()) {
+    Text("Console")
+}
+```
+
+> tip: For more information, see the OwlseUI documentation in this repository.
+
+![Owlse Console](owlse-console.png)
+
+## 4. Get Owlse Apps
+
+Owlse also has a free desktop app for the Mac — distributed as a ready-to-run binary — that receives logs from your devices in real time and opens shared `.owlse` stores.
+
+The apps require two more simple configuration steps.
+
+### 4.1. Update Info.plist
+
+Add the following to your app's plist file:
+
+```swift
+<key>NSLocalNetworkUsageDescription</key>
+<string>Network usage required only for development purposes</string>
+<key>NSBonjourServices</key>
+<array>
+  <string>_owlse._tcp</string>
+</array>
+```
+
+> important: Owlse will **not show** any prompts unless you enable remote logging from the Owlse settings screen.
+
+### 4.2. Enable Remote Logging
+
+- **Option 1 (Recommended)** Enable automatic connection to Owlse apps using ``RemoteLogger/isAutomaticConnectionEnabled``:
+
+```swift
+#if DEBUG
+RemoteLogger.shared.isAutomaticConnectionEnabled = true
+#endif
+```
+
+- **Option 2 (Manual)**. Open the Owlse console from the app, go to "Settings", enable "Remote Logging", and select your Mac.
+
+![Enabling remote logging](remote-logging.png)
+
+Once the connection is established, open the Owlse app on your Mac and select the device in the sidebar. The next time you launch the app, the connection will happen automatically.
+
+![Owlse Pro](owlse-pro.png)
+
+## Next Steps
+
+Learn how to configure Owlse to best suit your app needs in <doc:NextSteps> and explore additional networking debugging techniques in <doc:NetworkLogging-Article>. 
