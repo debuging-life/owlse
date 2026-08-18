@@ -138,9 +138,11 @@ extension LoggerStore {
             }
         }
 
+        case crashReportStored(CrashReport)
+
         var url: URL? {
             switch self {
-            case .messageStored:
+            case .messageStored, .crashReportStored:
                 return nil
             case .networkTaskCreated(let event):
                 return event.originalRequest.url
@@ -148,6 +150,70 @@ extension LoggerStore {
                 return event.url
             case .networkTaskCompleted(let event):
                 return event.originalRequest.url
+            }
+        }
+
+        // MARK: - Crash Report Types
+
+        public struct CrashReport: Codable, Sendable, Identifiable {
+            public var id: UUID
+            public var crashedAt: Date
+            public var exceptionType: String
+            public var exceptionReason: String
+            public var signal: String?
+            public var threads: [CrashThread]
+            public var crashedThreadIndex: Int
+            public var appVersion: String?
+            public var buildNumber: String?
+            public var osVersion: String?
+            public var deviceModel: String?
+            public var metadata: [String: String]?
+
+            public init(id: UUID, crashedAt: Date, exceptionType: String, exceptionReason: String,
+                        signal: String?, threads: [CrashThread], crashedThreadIndex: Int,
+                        appVersion: String? = nil, buildNumber: String? = nil,
+                        osVersion: String? = nil, deviceModel: String? = nil,
+                        metadata: [String: String]? = nil) {
+                self.id = id
+                self.crashedAt = crashedAt
+                self.exceptionType = exceptionType
+                self.exceptionReason = exceptionReason
+                self.signal = signal
+                self.threads = threads
+                self.crashedThreadIndex = crashedThreadIndex
+                self.appVersion = appVersion
+                self.buildNumber = buildNumber
+                self.osVersion = osVersion
+                self.deviceModel = deviceModel
+                self.metadata = metadata
+            }
+        }
+
+        public struct CrashThread: Codable, Sendable {
+            public var index: Int
+            public var name: String?
+            public var frames: [CrashFrame]
+            public var isCrashed: Bool
+
+            public init(index: Int, name: String?, frames: [CrashFrame], isCrashed: Bool) {
+                self.index = index
+                self.name = name
+                self.frames = frames
+                self.isCrashed = isCrashed
+            }
+        }
+
+        public struct CrashFrame: Codable, Sendable {
+            public var index: Int
+            public var binaryName: String?
+            public var address: UInt64?
+            public var symbol: String?
+
+            public init(index: Int, binaryName: String? = nil, address: UInt64? = nil, symbol: String? = nil) {
+                self.index = index
+                self.binaryName = binaryName
+                self.address = address
+                self.symbol = symbol
             }
         }
     }

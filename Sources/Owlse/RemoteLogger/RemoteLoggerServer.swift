@@ -619,6 +619,9 @@ public final class RemoteLoggerServer: ObservableObject {
             ))
         case .updateMocks:
             break // Client-bound only
+        case .crashReportStored:
+            guard let report = try? JSONDecoder().decode(LoggerStore.Event.CrashReport.self, from: message.data) else { return }
+            ingestedEvents.send((client, .crashReportStored(report)))
         }
     }
 }

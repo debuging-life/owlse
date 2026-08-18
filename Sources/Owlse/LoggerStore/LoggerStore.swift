@@ -362,6 +362,7 @@ extension LoggerStore {
         case .networkTaskCreated(let event): process(event)
         case .networkTaskProgressUpdated(let event): process(event)
         case .networkTaskCompleted(let event): process(event)
+        case .crashReportStored: break // Crash reports are not persisted in Core Data
         }
     }
 

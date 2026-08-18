@@ -189,6 +189,8 @@ extension RemoteLogger {
         case openMessageDetails
         /// Payload: ``LoggerStore/Event/NetworkTaskCompleted``.
         case openTaskDetails
+        /// Payload: ``LoggerStore/Event/CrashReport``.
+        case crashReportStored
     }
 
     package struct ServerHelloResponse: Codable {

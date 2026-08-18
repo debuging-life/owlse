@@ -499,8 +499,8 @@ public final class RemoteLogger: ObservableObject, RemoteLoggerConnectionDelegat
             case .updateMocks:
                 let mocks = try JSONDecoder().decode([URLSessionMock].self, from: message.data)
                 NetworkDebugger.shared.update(mocks)
-            case .getMockedResponse, .openMessageDetails, .openTaskDetails:
-                break // Server specific (should never happen)
+            case .getMockedResponse, .openMessageDetails, .openTaskDetails, .crashReportStored:
+                break // Server-bound paths; a client should never receive these
             }
         default:
             break // Do nothing
@@ -657,6 +657,27 @@ public final class RemoteLogger: ObservableObject, RemoteLoggerConnectionDelegat
             } catch {
                 os_log("Failed to encode network message %{public}@", log: log, type: .error, "\(error)")
             }
+        case .crashReportStored(let report):
+            connection?.sendMessage(path: .crashReportStored, entity: report)
+        }
+    }
+
+    /// Reads crash reports written to disk by ``CrashReporter`` and streams
+    /// them to the connected Owlse desktop app. Call this once on app launch,
+    /// after calling ``CrashReporter/install()``.
+    ///
+    /// Reports are deleted from disk after a successful send so they are not
+    /// re-sent on subsequent launches.
+    public func sendPendingCrashReports() {
+        let reports = CrashReporter.pendingReports()
+        guard !reports.isEmpty else { return }
+        for report in reports {
+            didReceive(event: .crashReportStored(report))
+        }
+        // Delete after queuing — if the connection hasn't opened yet the events
+        // sit in the buffer and are sent once connected.
+        for report in reports {
+            CrashReporter.markSent(reportID: report.id)
         }
     }
 
